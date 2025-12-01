@@ -1,0 +1,42 @@
+package com.example.bmi;
+
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
+public class HistoryActivity extends AppCompatActivity {
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_history);
+
+        ListView lvHistory = findViewById(R.id.lvHistory);
+
+        List<String> historyList = getHistory();
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.list_item_history, historyList);
+        lvHistory.setAdapter(adapter);
+    }
+
+    private List<String> getHistory() {
+        SharedPreferences prefs = getSharedPreferences("BMI_HISTORY", MODE_PRIVATE);
+        Set<String> historySet = prefs.getStringSet("history", null);
+
+        if (historySet == null) {
+            return new ArrayList<>();
+        }
+
+        List<String> historyList = new ArrayList<>(historySet);
+        Collections.sort(historyList, Collections.reverseOrder()); 
+        return historyList;
+    }
+}
