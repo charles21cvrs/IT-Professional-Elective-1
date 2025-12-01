@@ -1,0 +1,186 @@
+package com.example.bmi;
+
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.view.MenuItem;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.view.GravityCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
+
+import com.google.android.material.navigation.NavigationView;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+
+public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+
+    private DrawerLayout drawerLayout;
+    private EditText etWeight, etHeight;
+    private Button btnCalculate;
+    private TextView tvResult, tvRecommendation;
+    private SwitchCompat switchTheme;
+    private RelativeLayout rootLayout;
+    private ImageView ivLogo, ivMenu;
+    private NavigationView navigationView;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // --- Setup Views ---
+        drawerLayout = findViewById(R.id.drawer_layout);
+        etWeight = findViewById(R.id.etWeight);
+        etHeight = findViewById(R.id.etHeight);
+        btnCalculate = findViewById(R.id.btnCalculate);
+        tvResult = findViewById(R.id.tvResult);
+        tvRecommendation = findViewById(R.id.tvRecommendation);
+        rootLayout = findViewById(R.id.rootLayout);
+        ivLogo = findViewById(R.id.ivLogo);
+        ivMenu = findViewById(R.id.ivMenu);
+        navigationView = findViewById(R.id.nav_view);
+
+        // --- Navigation Drawer ---
+        navigationView.setNavigationItemSelectedListener(this);
+
+        MenuItem switchItem = navigationView.getMenu().findItem(R.id.nav_dark_mode_switch);
+        switchTheme = (SwitchCompat) switchItem.getActionView();
+
+        ivMenu.setOnClickListener(v -> {
+            if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                drawerLayout.closeDrawer(GravityCompat.START);
+            } else {
+                drawerLayout.openDrawer(GravityCompat.START);
+            }
+        });
+
+        // Set initial theme
+        updateTheme(switchTheme.isChecked());
+
+        btnCalculate.setOnClickListener(v -> {
+            String weightStr = etWeight.getText().toString();
+            String heightStr = etHeight.getText().toString();
+
+            if (TextUtils.isEmpty(weightStr) || TextUtils.isEmpty(heightStr)) {
+                Toast.makeText(this, "Please enter weight and height", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            float weight = Float.parseFloat(weightStr);
+            float heightCm = Float.parseFloat(heightStr);
+            float heightM = heightCm / 100;
+            float bmi = weight / (heightM * heightM);
+            String[] result = getRecommendation(bmi);
+
+            tvResult.setText("Your BMI is: " + String.format("%.2f", bmi));
+            tvRecommendation.setText("Category: " + result[0] + "\n\nAdvice:\n" + result[1]);
+
+            saveCalculation(bmi, result[0], result[1]);
+        });
+
+        switchTheme.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            updateTheme(isChecked);
+        });
+    }
+
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.nav_history) {
+            startActivity(new Intent(MainActivity.this, HistoryActivity.class));
+        } else if (id == R.id.nav_about) {
+            showAboutDialog();
+        }
+
+        // Don't close the drawer if the switch is clicked
+        if (item.getItemId() != R.id.nav_dark_mode_switch) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        }
+        return true;
+    }
+
+    private void showAboutDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("About This App")
+                .setMessage("This BMI calculator is intended for informational purposes only. It is not a substitute for professional medical advice, diagnosis, or treatment.\n\nPlease consult with a healthcare professional for any health concerns.")
+                .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
+                .show();
+    }
+
+    private void updateTheme(boolean isDarkMode) {
+        int[][] states = new int[][]{new int[]{android.R.attr.state_checked}, new int[]{-android.R.attr.state_checked}};
+        ColorStateList iconColorList;
+        ColorStateList textColorList;
+
+        if (isDarkMode) {
+            // Dark Mode
+            rootLayout.setBackgroundResource(R.drawable.bg_2);
+            ivMenu.setImageResource(R.drawable.menu2eb);
+            tvResult.setTextColor(Color.WHITE);
+            tvRecommendation.setTextColor(Color.WHITE);
+            navigationView.setBackgroundColor(ContextCompat.getColor(this, R.color.black));
+
+            int[] iconColorsDark = {Color.WHITE, Color.LTGRAY};
+            int[] textColorsDark = {Color.WHITE, Color.LTGRAY};
+            iconColorList = new ColorStateList(states, iconColorsDark);
+            textColorList = new ColorStateList(states, textColorsDark);
+
+        } else {
+            // Light Mode
+            rootLayout.setBackgroundResource(R.drawable.bg_1);
+            ivMenu.setImageResource(R.drawable.menu1eb);
+            tvResult.setTextColor(Color.BLACK);
+            tvRecommendation.setTextColor(Color.BLACK);
+            navigationView.setBackgroundColor(ContextCompat.getColor(this, R.color.white));
+
+            int[] iconColorsLight = {Color.BLACK, Color.DKGRAY};
+            int[] textColorsLight = {Color.BLACK, Color.DKGRAY};
+            iconColorList = new ColorStateList(states, iconColorsLight);
+            textColorList = new ColorStateList(states, textColorsLight);
+        }
+
+        navigationView.setItemIconTintList(iconColorList);
+        navigationView.setItemTextColor(textColorList);
+    }
+
+    private void saveCalculation(float bmi, String category, String advice) {
+        SharedPreferences prefs = getSharedPreferences("BMI_HISTORY", MODE_PRIVATE);
+        Set<String> history = new HashSet<>(prefs.getStringSet("history", new HashSet<>()));
+
+        String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+        history.add(String.format(Locale.US, "%.1f - %s - %s\n%s", bmi, category, date, advice));
+
+        prefs.edit().putStringSet("history", history).apply();
+    }
+
+    private String[] getRecommendation(float bmi) {
+        if (bmi < 18.5) {
+            return new String[]{"Underweight", "• Eat more calories and protein\n" + "• Add eggs, chicken, peanuts, milk, rice\n" + "• Light exercise like walking to increase appetite"};
+        } else if (bmi < 25) {
+            return new String[]{"Normal", "• Maintain balanced diet\n" + "• Continue regular exercise\n" + "• Stay hydrated"};
+        } else if (bmi < 30) {
+            return new String[]{"Overweight", "• Reduce sugar and oily foods\n" + "• Exercise 20–30 mins daily (walking, jogging)\n" + "• Eat more veggies and fiber"};
+        } else {
+            return new String[]{"Obese", "• Avoid fast food and soda\n" + "• Start low-impact exercises (walking, swimming)\n" + "• Focus on vegetables + high-fiber meals"};
+        }
+    }
+}
